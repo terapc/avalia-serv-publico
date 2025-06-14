@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -15,10 +14,19 @@ serve(async (req) => {
 
   try {
     const { avaliacoes } = await req.json();
-    const comentarios = avaliacoes.map((a,i) =>
-      `Avaliação #${i+1}:\nAtendimento: ${a.nota_atendimento} | Espera: ${a.nota_espera} | Limpeza: ${a.nota_limpeza} | Satisfação: ${a.nota_respeito}\nComentário: ${a.comentario || "(sem comentário)"}\n`
-    ).join('\n');
-    const prompt = `Aja como um especialista em análise de dados sociais. Escreva uma visão geral das tendências observadas nas avaliações, identificando padrões, temas recorrentes e mudanças ao longo do tempo. (Evite sugestões ou julgamentos diretos) \n\n${comentarios}`;
+    const prompt = `Você é um analista de dados especializado em tendências de comportamento em serviços públicos. Abaixo estão avaliações anônimas feitas por usuários de uma unidade de saúde municipal, com notas de 1 a 5 em diferentes critérios e, às vezes, comentários.
+
+Sua tarefa é:
+1. Detectar padrões nas respostas.
+2. Identificar correlações entre critérios.
+3. Indicar temas recorrentes e destacar potenciais áreas críticas.
+4. Sugerir visualizações ou dados complementares que poderiam aprofundar a análise.
+
+Seja técnico, claro e oriente decisões com base nos dados disponíveis.
+
+Dados:
+${JSON.stringify(avaliacoes)}`;
+
     const requestGemini = {
       contents: [
         {
