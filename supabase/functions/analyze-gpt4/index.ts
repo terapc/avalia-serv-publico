@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -14,11 +13,17 @@ serve(async (req) => {
   }
   try {
     const { avaliacoes } = await req.json();
-    // Gera prompt
-    const comentarios = avaliacoes.map((a,i) =>
-      `Avaliação #${i+1}:\nAtendimento: ${a.nota_atendimento} | Espera: ${a.nota_espera} | Limpeza: ${a.nota_limpeza} | Satisfação: ${a.nota_respeito}\nComentário: ${a.comentario || "(sem comentário)"}\n`
-    ).join('\n');
-    const prompt = `Você é um especialista em políticas públicas. Faça um resumo dos principais pontos positivos e negativos presentes nas avaliações abaixo, e proponha recomendações práticas e objetivas para liderança da unidade. Seja direto, honesto, impessoal e construtivo nas recomendações.\n\n${comentarios}`;
+    const prompt = `Você é um especialista em políticas públicas e administração pública municipal. Com base nas seguintes avaliações da população sobre uma unidade de saúde — incluindo notas de 1 a 5 sobre atendimento, tempo de espera, limpeza e satisfação geral, além de comentários textuais — identifique:
+
+1. Pontos positivos observados.
+2. Pontos negativos e desafios enfrentados.
+3. Recomendações objetivas e práticas para a gestão pública.
+4. Estratégias possíveis para aumentar a satisfação do cidadão.
+
+Seja claro, direto e use linguagem acessível a gestores públicos.
+
+Avaliações recebidas:
+${JSON.stringify(avaliacoes)}`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: "POST",
