@@ -20,12 +20,16 @@ serve(async (req) => {
     ).join('\n');
     const prompt = `Aja como um especialista em análise de dados sociais. Escreva uma visão geral das tendências observadas nas avaliações, identificando padrões, temas recorrentes e mudanças ao longo do tempo. (Evite sugestões ou julgamentos diretos) \n\n${comentarios}`;
     const requestGemini = {
-      model: "gemini-1.5-flash",
-      messages: [
-        {role: "user", content: [{ type: "text", text: prompt }] }
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }]
+        }
       ],
-      temperature: 0.4,
-      max_tokens: 700
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 700
+      }
     };
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
