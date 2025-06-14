@@ -1,6 +1,6 @@
-
 import React, { useState } from "react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 const QUESTIONS = [
   { id: "q1", label: "Atendimento da equipe", help: "(Simpatia, respeito, clareza)" },
   { id: "q2", label: "Tempo de espera", help: "(Rapidez do atendimento)" },
@@ -23,31 +23,41 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ onFinish }) => {
 
   const anyMissing = QUESTIONS.some(q => !answers[q.id]);
 
-  function saveToLocal(data: any) {
-    const saved = JSON.parse(localStorage.getItem("avaliaserv-data") || "[]");
-    localStorage.setItem("avaliaserv-data", JSON.stringify([...saved, data]));
+  async function saveToSupabase(data: any) {
+    // Mapeia os campos para o formato da tabela avaliacoes do Supabase
+    const registro = {
+      nota_atendimento: data.q1,
+      nota_espera: data.q2,
+      nota_limpeza: data.q3,
+      nota_respeito: data.q4,
+      comentario: data.comment,
+      data_envio: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("avaliacoes").insert([registro]);
+    return error === null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (anyMissing) {
       toast({ title: "Preencha todas as notas." });
       return;
     }
     setLoading(true);
-    // Simula salvamento; depois trocar por Supabase
-    setTimeout(() => {
-      saveToLocal({
-        ...answers,
-        comment,
-        timestamp: Date.now()
-      });
-      setLoading(false);
+    const sucesso = await saveToSupabase({
+      ...answers,
+      comment,
+      timestamp: Date.now(),
+    });
+    setLoading(false);
+    if (sucesso) {
       toast({ title: "Avaliação enviada com sucesso!" });
       setAnswers({});
       setComment("");
       if (onFinish) onFinish();
-    }, 600);
+    } else {
+      toast({ title: "Erro ao enviar. Tente novamente mais tarde." });
+    }
   };
 
   return (
