@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -13,16 +14,22 @@ serve(async (req) => {
   }
   try {
     const { avaliacoes } = await req.json();
-    const prompt = `Você é um especialista em políticas públicas e administração pública municipal. Com base nas seguintes avaliações da população sobre uma unidade de saúde — incluindo notas de 1 a 5 sobre atendimento, tempo de espera, limpeza e satisfação geral, além de comentários textuais — identifique:
+    const prompt = `Você é um especialista em políticas públicas e análise de qualidade de serviços governamentais. Seu papel é interpretar os dados de satisfação dos usuários em um serviço de saúde pública e apresentar recomendações baseadas em boas práticas administrativas.
 
-1. Pontos positivos observados.
-2. Pontos negativos e desafios enfrentados.
-3. Recomendações objetivas e práticas para a gestão pública.
-4. Estratégias possíveis para aumentar a satisfação do cidadão.
+Baseie-se nas seguintes informações:
+- Quatro indicadores numéricos de 1 a 5: atendimento, espera, limpeza e respeito
+- Comentário livre dos cidadãos
+- Total de avaliações e médias por categoria
 
-Seja claro, direto e use linguagem acessível a gestores públicos.
+Sua análise deve conter:
+1. Identificação dos pontos positivos e negativos nas experiências dos usuários.
+2. Recomendações práticas e objetivas para melhoria dos serviços.
+3. Sugestões administrativas baseadas em boas práticas de gestão pública.
+4. Tom analítico, profissional e voltado à tomada de decisão.
 
-Avaliações recebidas:
+Evite repetir valores numéricos já exibidos na tela. O foco é em análise e melhoria.
+
+Dados:
 ${JSON.stringify(avaliacoes)}`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
