@@ -1,1 +1,9 @@
+
 project_id = "umtpttbwcgonyfkvprio"
+
+[functions.analyze-gpt4]
+verify_jwt = false
+[functions.analyze-claude]
+verify_jwt = false
+[functions.analyze-gemini]
+verify_jwt = false
