@@ -14,15 +14,21 @@ serve(async (req) => {
 
   try {
     const { avaliacoes } = await req.json();
-    const prompt = `Você é um analista de dados especializado em tendências de comportamento em serviços públicos. Abaixo estão avaliações anônimas feitas por usuários de uma unidade de saúde municipal, com notas de 1 a 5 em diferentes critérios e, às vezes, comentários.
+    const prompt = `Você é um analista de dados especializado em saúde pública e usabilidade de serviços. Sua função é analisar as médias e padrões de avaliações feitas por cidadãos em um serviço de saúde municipal.
 
-Sua tarefa é:
-1. Detectar padrões nas respostas.
-2. Identificar correlações entre critérios.
-3. Indicar temas recorrentes e destacar potenciais áreas críticas.
-4. Sugerir visualizações ou dados complementares que poderiam aprofundar a análise.
+Com base nas informações:
+- Notas de 1 a 5 para atendimento, espera, limpeza e respeito
+- Comentários escritos dos usuários (se houver)
+- Total de registros disponíveis
+- Nenhuma informação pessoal do usuário
 
-Seja técnico, claro e oriente decisões com base nos dados disponíveis.
+Forneça uma análise estatística e qualitativa com foco em:
+1. Tendências gerais por categoria (pontos fortes e fracos)
+2. Padrões recorrentes entre as notas (ex: correlação entre espera e satisfação)
+3. Recomendações baseadas em evidências para otimizar o serviço
+4. Considerações sobre necessidade de mais dados qualitativos (ex: comentários, datas)
+
+Sua linguagem deve ser técnica, objetiva e estruturada.
 
 Dados:
 ${JSON.stringify(avaliacoes)}`;
