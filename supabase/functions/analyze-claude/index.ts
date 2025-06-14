@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -15,10 +14,16 @@ serve(async (req) => {
 
   try {
     const { avaliacoes } = await req.json();
-    const comentarios = avaliacoes.map((a,i) =>
-      `Avaliação #${i+1}:\nAtendimento: ${a.nota_atendimento} | Espera: ${a.nota_espera} | Limpeza: ${a.nota_limpeza} | Satisfação: ${a.nota_respeito}\nComentário: ${a.comentario || "(sem comentário)"}\n`
-    ).join('\n');
-    const prompt = `Como consultor de experiência do cidadão, faça um breve resumo apontando as principais oportunidades de melhoria em processos, estrutura ou atendimento público municipal com base nos relatos abaixo. Termine com uma mensagem de incentivo curta para a equipe.\n\n${comentarios}`;
+    const prompt = `Você é um consultor especializado em experiência do cidadão. Analise os dados coletados por uma pesquisa de satisfação feita com usuários de uma unidade de saúde pública. Com base nas notas (1 a 5) e comentários fornecidos, forneça:
+
+1. Um diagnóstico geral da experiência do cidadão.
+2. Oportunidades claras de melhoria nos serviços.
+3. Sugestões de ações estratégicas voltadas para aumentar a confiança da população.
+4. Uma mensagem motivacional e inspiradora para a equipe da unidade de saúde, valorizando seu papel e incentivando a excelência no serviço público.
+
+Avaliações recebidas:
+${JSON.stringify(avaliacoes)}`;
+
     const requestAnthropic = {
       model: "claude-3-haiku-20240307",
       system: "Consultor de experiência do cidadão, direto e objetivo, propondo melhorias a partir dos dados recebidos.",
