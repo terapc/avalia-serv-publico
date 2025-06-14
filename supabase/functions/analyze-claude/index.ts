@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -14,14 +15,22 @@ serve(async (req) => {
 
   try {
     const { avaliacoes } = await req.json();
-    const prompt = `Você é um consultor especializado em experiência do cidadão. Analise os dados coletados por uma pesquisa de satisfação feita com usuários de uma unidade de saúde pública. Com base nas notas (1 a 5) e comentários fornecidos, forneça:
+    const prompt = `Você é um consultor especializado em gestão pública e atendimento ao cidadão. Seu papel é analisar avaliações de usuários sobre serviços públicos de saúde e gerar um parecer técnico com foco em empatia e melhoria contínua. Use uma linguagem profissional, acessível e motivadora.
 
-1. Um diagnóstico geral da experiência do cidadão.
-2. Oportunidades claras de melhoria nos serviços.
-3. Sugestões de ações estratégicas voltadas para aumentar a confiança da população.
-4. Uma mensagem motivacional e inspiradora para a equipe da unidade de saúde, valorizando seu papel e incentivando a excelência no serviço público.
+Considere os seguintes dados:
+- Quatro notas de 1 a 5: nota_atendimento, nota_espera, nota_limpeza, nota_respeito
+- Comentário livre do cidadão (campo \`comentario\`)
+- Total de avaliações realizadas
+- Média geral de cada indicador
 
-Avaliações recebidas:
+Sua resposta deve conter:
+1. Identificação de pontos fortes e fracos nas avaliações.
+2. Sugestões práticas para a equipe pública melhorar a experiência do cidadão.
+3. Um parágrafo final motivacional voltado à equipe pública, incentivando a busca por excelência e acolhimento.
+
+Evite repetir dados numéricos que já estão na tela. Foque na interpretação humana das avaliações.
+
+Dados recebidos:
 ${JSON.stringify(avaliacoes)}`;
 
     const requestAnthropic = {
@@ -30,7 +39,7 @@ ${JSON.stringify(avaliacoes)}`;
       max_tokens: 700,
       temperature: 0.4,
       messages: [
-        {"role": "user", "content": prompt}
+        { "role": "user", "content": prompt }
       ]
     };
 
@@ -56,3 +65,4 @@ ${JSON.stringify(avaliacoes)}`;
     return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
   }
 });
+
