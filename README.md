@@ -1,73 +1,27 @@
-# Welcome to your Lovable project
 
-## Project info
+# AvaliaServ Público
 
-**URL**: https://lovable.dev/projects/d145fd12-9123-4a0d-b8bb-cf985137b776
+AvaliaServ Público é uma ferramenta gratuita de avaliação de serviços públicos de saúde, integrando dados coletados com análises feitas por três das maiores IAs do mercado: GPT-4, Claude e Gemini. A solução utiliza Supabase para persistência de dados, edge functions para processamento backend e interface web construída com Lovable.
 
-## How can I edit this code?
+## Recursos principais
+- Formulário de avaliação responsivo
+- Análises inteligentes por GPT-4, Claude e Gemini
+- Resumos automáticos de IA com botão de expandir
+- Armazenamento seguro via Supabase
+- Backend com Edge Functions e autenticação protegida
+- Código aberto sincronizado via GitHub
 
-There are several ways of editing your application.
+## Como funciona
+O cidadão responde perguntas rápidas sobre a experiência em serviços públicos de saúde. As respostas são armazenadas no Supabase. Três inteligências artificiais (GPT-4, Claude e Gemini) analisam os dados fornecendo múltiplas visões para a gestão, incluindo recomendações automáticas e resumos para decisões baseadas em evidências.
 
-**Use Lovable**
+## Destaques técnicos
+- Integração completa com Supabase e GitHub
+- Uso intensivo de edge functions para processamento seguro e escalável
+- Frontend moderno e responsivo com componentização
+- Tutoriais para fácil compreensão e reuso do app
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d145fd12-9123-4a0d-b8bb-cf985137b776) and start prompting.
+## Impacto esperado
+Melhorar a gestão pública de saúde com base em dados reais dos cidadãos, oferecendo relatórios instantâneos e insights para melhoria contínua, em alinhamento com a Lei 13.460/2017.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/d145fd12-9123-4a0d-b8bb-cf985137b776) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)

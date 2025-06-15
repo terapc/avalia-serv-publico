@@ -1,7 +1,8 @@
+
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Check } from "lucide-react";
+import { Check, ArrowDown } from "lucide-react";
 
 const QUESTIONS = [
   { id: "q1", label: "Atendimento" },
@@ -26,6 +27,11 @@ const ANALYSIS_LABELS = {
   claude: "Claude",
   gemini: "Gemini"
 };
+const ANALYSIS_COLORS = {
+  gpt4: "from-blue-200 to-blue-100 border-blue-400",
+  claude: "from-green-100 to-green-50 border-green-300",
+  gemini: "from-cyan-100 to-blue-50 border-cyan-400"
+};
 
 async function fetchAvaliacoes() {
   const { data, error } = await supabase
@@ -36,34 +42,10 @@ async function fetchAvaliacoes() {
   return data as Answered[];
 }
 
-async function callAnalysis(source: AnalysisSource, data: Answered[]) {
-  // Chama a edge function correspondente
-  const { data: response, error } = await supabase.functions.invoke(`analyze-${source}`, {
-    body: { avaliacoes: data },
-  });
-  if (error) throw error;
-  return response?.analysis || "Nenhum resultado gerado.";
-}
-
-// Novo: hook utilitário para painel expand/collapse por IA
 function useCollapsibleStates(sources: string[]) {
   const [state, setState] = useState<{[k: string]: boolean}>({});
   const toggle = (k: string) => setState(s => ({...s, [k]: !s[k]}));
   return { open: state, toggle };
-}
-
-// Novo: Função que salva resumo+análise na tabela avaliacoes
-async function saveAnalysisSummaryToDB(source: AnalysisSource, analysis: string, resumo: string) {
-  const keyAnalysis = {
-    gpt4: { analysis: "resumo_gpt", field: "resumo_gpt" },
-    claude: { analysis: "resumo_claude", field: "resumo_claude" },
-    gemini: { analysis: "resumo_gemini", field: "resumo_gemini" }
-  };
-  // Salvar apenas no primeiro registro para simplificação (ou adaptar para lógica real)
-  await supabase
-    .from("avaliacoes")
-    .update({ [keyAnalysis[source].field]: resumo })
-    .neq("id", "null"); // <= Placeholder. Ajuste conforme a regra de save.
 }
 
 const ResultsDashboard: React.FC = () => {
@@ -89,20 +71,22 @@ const ResultsDashboard: React.FC = () => {
   async function handleAnalysis(source: AnalysisSource) {
     setLoading(l => ({...l, [source]: true}));
     try {
-      // Chama a Edge Function e já recebe resumo + análise
       const { data: response, error } = await supabase.functions.invoke(`analyze-${source}`, {
         body: { avaliacoes: data || [] },
       });
       if (error) throw error;
       setAnalyses(a => ({...a, [source]: response?.analysis || ""}));
       setResumos(r => ({...r, [source]: response?.resumo || ""}));
-      // Opcional: Salva no banco de dados
-      // await saveAnalysisSummaryToDB(source, response?.analysis, response?.resumo);
     } catch (err) {
       setAnalyses(a => ({...a, [source]: "Erro ao gerar análise. Tente novamente mais tarde."}));
       setResumos(r => ({...r, [source]: "Erro ao gerar resumo."}));
     }
     setLoading(l => ({...l, [source]: false}));
+  }
+
+  // Simula download de PDF
+  function handleDownloadPDF() {
+    window.alert("Relatório em PDF será gerado em breve. (Funcionalidade simulada para apresentação)");
   }
 
   return (
@@ -128,55 +112,69 @@ const ResultsDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <div className="text-sm text-muted-foreground">
-              Total de avaliações:{" "}
+            <div className="text-sm text-muted-foreground flex items-center gap-3">
+              Total de avaliações: 
               <span className="font-bold">{data?.length || 0}</span>
+              <button onClick={handleDownloadPDF}
+                className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-400 to-green-400 text-white rounded-full font-semibold shadow hover:from-blue-500 hover:to-green-500 flex gap-2 items-center transition-colors text-sm"
+                title="Baixar relatório em PDF"
+              >
+                <ArrowDown size={18} /> Baixar PDF do relatório
+              </button>
             </div>
           </>
         )}
       </div>
-
-      {/* Coluna 2: Análises IA */}
-      <div className="bg-white rounded-xl shadow p-8 flex flex-col">
-        <h3 className="text-xl font-bold mb-4 text-green-900">Análise Inteligente</h3>
-        <div className="flex gap-2 mb-4">
-          {(["gpt4", "claude", "gemini"] as AnalysisSource[]).map(src => (
-            <button
-              key={src}
-              disabled={loading[src] || isLoading}
-              onClick={() => handleAnalysis(src)}
-              className={`flex items-center gap-1 px-5 py-2 rounded-xl font-semibold border shadow border-green-200 bg-green-50 hover:bg-green-100 transition text-green-800 disabled:opacity-60`}
-            >
-              {analyses[src] ? <Check size={18} /> : null}
-              Analisar via {ANALYSIS_LABELS[src]}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-3">
-          {(["gpt4", "claude", "gemini"] as AnalysisSource[]).map(src => (
-            <div key={src} className="bg-gray-50 rounded-lg px-4 py-3 border">
-              <div className="text-xs font-bold text-green-800 mb-1">{ANALYSIS_LABELS[src]}</div>
+      {/* Coluna 2: Análises IA, separando visualmente cada bloco */}
+      <div className="flex flex-col gap-5">
+        {(["gpt4","claude","gemini"] as AnalysisSource[]).map(src => (
+          <div
+            key={src}
+            className={`bg-gradient-to-br ${ANALYSIS_COLORS[src]} rounded-xl shadow border px-5 py-5 flex flex-col`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`font-bold text-lg ${
+                src==="gpt4"? "text-blue-800" : src==="claude"? "text-green-700" : "text-cyan-700"
+              }`}>
+                {ANALYSIS_LABELS[src]}
+              </span>
+              <button
+                disabled={loading[src] || isLoading}
+                onClick={() => handleAnalysis(src)}
+                className={`ml-2 flex items-center gap-1 px-4 py-1.5 rounded font-semibold border border-opacity-40 bg-white/80 hover:bg-white transition text-sm ${
+                  loading[src] ? "opacity-60 pointer-events-none" : ""
+                }`}
+              >
+                {analyses[src] ? <Check size={18} /> : null}
+                {loading[src] ? "Gerando análise..." : `Analisar via ${ANALYSIS_LABELS[src]}`}
+              </button>
+            </div>
+            <div>
               {loading[src] ? (
-                <div className="text-gray-400">Analisando dados…</div>
+                <div className="text-gray-600 italic py-2">Analisando dados…</div>
               ) : resumos[src] ? (
                 <div>
-                  <div className="mb-2">{resumos[src]}</div>
+                  <div className="mb-2 text-gray-800">{resumos[src]}</div>
                   <button
-                    className="text-green-700 text-xs font-semibold underline hover-scale"
+                    className="text-blue-700 text-xs font-semibold underline"
                     onClick={() => toggle(src)}
                   >
-                    {open[src] ? "Ocultar análise completa" : "Ver análise completa"}
+                    {open[src]
+                      ? "Ocultar análise completa"
+                      : "Ver análise completa"}
                   </button>
                   {open[src] &&
-                    <div className="mt-2 text-gray-800 animate-fade-in" style={{whiteSpace: "pre-line"}}>{analyses[src]}</div>
+                    <div className="mt-2 text-gray-800 bg-white/70 rounded p-3 animate-fade-in whitespace-pre-line border text-sm">
+                      {analyses[src]}
+                    </div>
                   }
                 </div>
               ) : (
-                <div className="text-gray-400">Clique no botão acima para gerar a análise.</div>
+                <div className="text-gray-500 text-sm py-2">Clique no botão acima para gerar a análise desta IA.</div>
               )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
