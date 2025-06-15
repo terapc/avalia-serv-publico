@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import SurveyForm from "@/components/SurveyForm";
 import AvaliaServLogo from "@/components/AvaliaServLogo";
+import { Button } from "@/components/ui/button";
 
 const Apresentacao = () => (
   <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-xl shadow-lg px-6 py-6 mb-10 max-w-2xl mx-auto flex flex-col items-center gap-4">
@@ -31,7 +32,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center bg-gradient-to-br from-blue-50 to-green-50">
-      <div className="w-full max-w-2xl flex flex-col items-center mt-10 mb-8">
+      <div className="w-full max-w-4xl flex flex-col items-center mt-10 mb-8 px-4">
         <AvaliaServLogo size={56} />
         <Apresentacao />
         <div className="w-full bg-white rounded-xl shadow-2xl p-8 space-y-8">
@@ -41,12 +42,13 @@ const Index = () => {
           </p>
           <SurveyForm onFinish={() => navigate("/resultados")} />
         </div>
-        <button
+        <Button
           onClick={() => navigate("/resultados")}
-          className="text-primary underline hover:text-blue-700 mt-5 font-medium"
+          variant="link"
+          className="mt-6 text-lg"
         >
           Ver resultados públicos
-        </button>
+        </Button>
       </div>
     </div>
   );

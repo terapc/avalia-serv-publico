@@ -48,6 +48,24 @@ export type Database = {
         }
         Relationships: []
       }
+      interacoes: {
+        Row: {
+          created_at: string
+          id: number
+          tipo_interacao: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          tipo_interacao: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          tipo_interacao?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

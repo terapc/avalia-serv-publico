@@ -1,8 +1,11 @@
-
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Check, ArrowDown } from "lucide-react";
+import { Check, ArrowDown, Trash2, FlaskConical, Loader2 } from "lucide-react";
+import { Button } from "./ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { generateFakeData } from "@/lib/testData";
+import { toast } from "sonner";
 
 const QUESTIONS = [
   { id: "q1", label: "Atendimento" },
@@ -42,6 +45,15 @@ async function fetchAvaliacoes() {
   return data as Answered[];
 }
 
+async function fetchInteractions() {
+  const { data, error } = await supabase.from("interacoes").select("tipo_interacao");
+  if (error) {
+    console.error("Error fetching interactions:", error);
+    return [];
+  }
+  return data;
+}
+
 function useCollapsibleStates(sources: string[]) {
   const [state, setState] = useState<{[k: string]: boolean}>({});
   const toggle = (k: string) => setState(s => ({...s, [k]: !s[k]}));
@@ -52,11 +64,28 @@ const ResultsDashboard: React.FC = () => {
   const [analyses, setAnalyses] = useState<{[k in AnalysisSource]?: string}>({});
   const [resumos, setResumos] = useState<{[k in AnalysisSource]?: string}>({});
   const [loading, setLoading] = useState<{[k in AnalysisSource]?: boolean}>({});
+  const [simulationLoading, setSimulationLoading] = useState<"zerar" | "gerar" | null>(null);
+
   const { open, toggle } = useCollapsibleStates(["gpt4", "claude", "gemini"]);
+  const queryClient = useQueryClient();
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["avaliacoes"],
     queryFn: fetchAvaliacoes,
   });
+
+  const { data: interactionsData } = useQuery({
+    queryKey: ["interactions"],
+    queryFn: fetchInteractions,
+  });
+
+  const interactionCounts = useMemo(() => {
+    if (!interactionsData) return {};
+    return interactionsData.reduce((acc, curr) => {
+      acc[curr.tipo_interacao] = (acc[curr.tipo_interacao] || 0) + 1;
+      return acc;
+    }, {} as {[key: string]: number});
+  }, [interactionsData]);
 
   const totals = QUESTIONS.map(q => {
     if (!data) return "--";
@@ -68,7 +97,13 @@ const ResultsDashboard: React.FC = () => {
     return scores.length ? (scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(2) : "--";
   });
 
+  async function logInteraction(type: string) {
+    await supabase.from("interacoes").insert({ tipo_interacao: type });
+    queryClient.invalidateQueries({ queryKey: ["interactions"] });
+  }
+
   async function handleAnalysis(source: AnalysisSource) {
+    await logInteraction(`analisar_${source}`);
     setLoading(l => ({...l, [source]: true}));
     try {
       const { data: response, error } = await supabase.functions.invoke(`analyze-${source}`, {
@@ -83,49 +118,97 @@ const ResultsDashboard: React.FC = () => {
     }
     setLoading(l => ({...l, [source]: false}));
   }
+  
+  async function handleZerarDados() {
+    setSimulationLoading("zerar");
+    await logInteraction("zerar_dados");
+    const { error } = await supabase.from("avaliacoes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) {
+      toast.error("Erro ao apagar os dados.", { description: error.message });
+    } else {
+      toast.success("Todos os dados de avaliação foram apagados!");
+    }
+    await refetch();
+    setSimulationLoading(null);
+  }
+  
+  async function handleGerarDados() {
+    setSimulationLoading("gerar");
+    await logInteraction("gerar_dados");
+    const fakeData = generateFakeData(50);
+    const { error } = await supabase.from("avaliacoes").insert(fakeData);
+     if (error) {
+      toast.error("Erro ao gerar dados de teste.", { description: error.message });
+    } else {
+      toast.success("50 novos registros de teste foram criados!");
+    }
+    await refetch();
+    setSimulationLoading(null);
+  }
 
-  // Simula download de PDF
   function handleDownloadPDF() {
     window.alert("Relatório em PDF será gerado em breve. (Funcionalidade simulada para apresentação)");
   }
 
   return (
-    <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* Coluna 1: Médias/Notas */}
+    <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Coluna 1: Médias/Notas e Controles de Simulação */}
       <div className="bg-white rounded-xl shadow p-8 flex flex-col justify-between min-h-[320px]">
-        <h3 className="text-xl font-bold mb-4 text-blue-800">Média das avaliações</h3>
-        {isLoading ? (
-          <div className="text-center py-8">Carregando avaliações…</div>
-        ) : error ? (
-          <div className="text-red-600">Erro ao buscar dados.</div>
-        ) : (
-          <>
-            <table className="w-full mb-4">
-              <tbody>
-                {QUESTIONS.map((q,i) => (
-                  <tr key={q.id} className="border-b last:border-0">
-                    <td className="py-2 pr-4 font-medium">{q.label}</td>
-                    <td className="py-2 text-center">
-                      <span className="inline-block rounded-full bg-blue-100 text-blue-600 w-12 font-mono font-bold text-lg">{totals[i]}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="text-sm text-muted-foreground flex items-center gap-3">
-              Total de avaliações: 
-              <span className="font-bold">{data?.length || 0}</span>
-              <button onClick={handleDownloadPDF}
-                className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-400 to-green-400 text-white rounded-full font-semibold shadow hover:from-blue-500 hover:to-green-500 flex gap-2 items-center transition-colors text-sm"
-                title="Baixar relatório em PDF"
-              >
-                <ArrowDown size={18} /> Baixar PDF do relatório
-              </button>
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-blue-800">Média das avaliações</h3>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" onClick={handleGerarDados} disabled={!!simulationLoading}>
+                    {simulationLoading === 'gerar' ? <Loader2 className="animate-spin"/> : <FlaskConical size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Gerar 50 registros de teste</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="destructive" size="icon" onClick={handleZerarDados} disabled={!!simulationLoading}>
+                    {simulationLoading === 'zerar' ? <Loader2 className="animate-spin"/> : <Trash2 size={18} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Apagar todos os dados</TooltipContent>
+              </Tooltip>
             </div>
-          </>
-        )}
+          </div>
+          {isLoading ? (
+            <div className="text-center py-8">Carregando avaliações…</div>
+          ) : error ? (
+            <div className="text-red-600">Erro ao buscar dados.</div>
+          ) : (
+            <>
+              <table className="w-full mb-4">
+                <tbody>
+                  {QUESTIONS.map((q,i) => (
+                    <tr key={q.id} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-medium">{q.label}</td>
+                      <td className="py-2 text-center">
+                        <span className="inline-block rounded-full bg-blue-100 text-blue-600 w-12 font-mono font-bold text-lg">{totals[i]}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="text-sm text-muted-foreground flex items-center gap-3">
+                Total de avaliações: 
+                <span className="font-bold">{data?.length || 0}</span>
+                <button onClick={handleDownloadPDF}
+                  className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-400 to-green-400 text-white rounded-full font-semibold shadow hover:from-blue-500 hover:to-green-500 flex gap-2 items-center transition-colors text-sm"
+                  title="Baixar relatório em PDF"
+                >
+                  <ArrowDown size={18} /> Baixar PDF do relatório
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-      {/* Coluna 2: Análises IA, separando visualmente cada bloco */}
+      {/* Coluna 2: Análises IA */}
       <div className="flex flex-col gap-5">
         {(["gpt4","claude","gemini"] as AnalysisSource[]).map(src => (
           <div
@@ -138,16 +221,19 @@ const ResultsDashboard: React.FC = () => {
               }`}>
                 {ANALYSIS_LABELS[src]}
               </span>
-              <button
+              <Button
                 disabled={loading[src] || isLoading}
-                onClick={() => handleAnalysis(src)}
-                className={`ml-2 flex items-center gap-1 px-4 py-1.5 rounded font-semibold border border-opacity-40 bg-white/80 hover:bg-white transition text-sm ${
+                onClick={() => handleAnalysis(src as AnalysisSource)}
+                variant="secondary"
+                size="sm"
+                className={`ml-2 flex items-center gap-2 px-4 py-1.5 rounded font-semibold border border-opacity-40 bg-white/80 hover:bg-white transition text-sm ${
                   loading[src] ? "opacity-60 pointer-events-none" : ""
                 }`}
               >
-                {analyses[src] ? <Check size={18} /> : null}
-                {loading[src] ? "Gerando análise..." : `Analisar via ${ANALYSIS_LABELS[src]}`}
-              </button>
+                {analyses[src] ? <Check size={16} /> : null}
+                {loading[src] ? "Gerando..." : `Analisar com ${ANALYSIS_LABELS[src]}`}
+                <span className="text-xs opacity-80">({interactionCounts[`analisar_${src}`] || 0})</span>
+              </Button>
             </div>
             <div>
               {loading[src] ? (
