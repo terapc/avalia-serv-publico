@@ -43,7 +43,7 @@ const ResultsDashboard: React.FC = () => {
   async function handleZerarDados() {
     setSimulationLoading("zerar");
     await logInteraction("zerar_dados");
-    const { error } = await supabase.from("avaliacoes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const { error } = await supabase.from("avaliacoes").delete().not("id", "is", null);
     if (error) {
       toast.error("Erro ao apagar os dados.", { description: error.message });
     } else {
