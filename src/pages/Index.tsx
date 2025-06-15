@@ -39,6 +39,8 @@ const Index = () => {
           <h1 className="text-2xl font-bold text-primary mb-1 text-center">Avalie o serviço público de saúde!</h1>
           <p className="text-lg text-muted-foreground text-center mb-6">
             Suas respostas são anônimas e ajudam a melhorar a experiência de todos.
+            <br/>
+            <span className="text-sm italic">Para fins de demonstração, a página de resultados é populada com dados fictícios.</span>
           </p>
           <SurveyForm onFinish={() => navigate("/resultados")} />
         </div>

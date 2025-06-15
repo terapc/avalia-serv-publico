@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,7 +70,7 @@ const ResultsDashboard: React.FC = () => {
   const { open, toggle } = useCollapsibleStates(["gpt4", "claude", "gemini"]);
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["avaliacoes"],
     queryFn: fetchAvaliacoes,
   });
@@ -128,7 +129,7 @@ const ResultsDashboard: React.FC = () => {
     } else {
       toast.success("Todos os dados de avaliação foram apagados!");
     }
-    await refetch();
+    await queryClient.invalidateQueries({ queryKey: ["avaliacoes"] });
     setSimulationLoading(null);
   }
   
@@ -142,7 +143,7 @@ const ResultsDashboard: React.FC = () => {
     } else {
       toast.success("50 novos registros de teste foram criados!");
     }
-    await refetch();
+    await queryClient.invalidateQueries({ queryKey: ["avaliacoes"] });
     setSimulationLoading(null);
   }
 
@@ -164,7 +165,7 @@ const ResultsDashboard: React.FC = () => {
                     {simulationLoading === 'gerar' ? <Loader2 className="animate-spin"/> : <FlaskConical size={18} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Gerar 50 registros de teste</TooltipContent>
+                <TooltipContent>Gerar 50 registros de teste ({interactionCounts['gerar_dados'] || 0} usos)</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -172,7 +173,7 @@ const ResultsDashboard: React.FC = () => {
                     {simulationLoading === 'zerar' ? <Loader2 className="animate-spin"/> : <Trash2 size={18} />}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Apagar todos os dados</TooltipContent>
+                <TooltipContent>Apagar todos os dados ({interactionCounts['zerar_dados'] || 0} usos)</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -194,11 +195,13 @@ const ResultsDashboard: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-              <div className="text-sm text-muted-foreground flex items-center gap-3">
-                Total de avaliações: 
-                <span className="font-bold">{data?.length || 0}</span>
+              <div className="mt-4 text-sm text-muted-foreground flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-1">
+                  Total de avaliações: 
+                  <span className="font-bold">{data?.length || 0}</span>
+                </div>
                 <button onClick={handleDownloadPDF}
-                  className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-400 to-green-400 text-white rounded-full font-semibold shadow hover:from-blue-500 hover:to-green-500 flex gap-2 items-center transition-colors text-sm"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-400 to-green-400 text-white rounded-full font-semibold shadow hover:from-blue-500 hover:to-green-500 flex gap-2 items-center transition-colors text-sm"
                   title="Baixar relatório em PDF"
                 >
                   <ArrowDown size={18} /> Baixar PDF do relatório

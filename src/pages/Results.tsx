@@ -10,14 +10,17 @@ const Results = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex flex-col items-center pt-8 px-4">
       <AvaliaServLogo size={44} />
-      <div className="flex flex-row items-center w-full max-w-7xl my-8">
-        <Button
-          onClick={() => navigate("/")}
-          variant="outline"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Nova avaliação
-        </Button>
-        <h2 className="mx-auto text-2xl font-bold text-primary drop-shadow -translate-x-1/2 left-1/2 relative">Resultados Públicos</h2>
+      <div className="flex flex-col sm:grid sm:grid-cols-[1fr_auto_1fr] items-center w-full max-w-7xl my-8 gap-4">
+        <div className="sm:justify-self-start">
+          <Button
+            onClick={() => navigate("/")}
+            variant="outline"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" /> Nova avaliação
+          </Button>
+        </div>
+        <h2 className="text-2xl text-center font-bold text-primary drop-shadow order-first sm:order-none">Resultados Públicos</h2>
+        <div className="hidden sm:block"></div>
       </div>
       <div className="w-full max-w-7xl mb-6">
         <div className="rounded-xl bg-white/95 shadow p-4 text-center text-md font-semibold text-blue-900">

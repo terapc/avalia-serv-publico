@@ -3,7 +3,7 @@ import React from "react";
 
 const AvaliaServLogo = ({ size = 64 }: { size?: number }) => (
   <svg
-    width={size * 2}
+    width={size * 4}
     height={size}
     viewBox="0 0 320 80"
     fill="none"
