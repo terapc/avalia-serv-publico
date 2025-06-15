@@ -21,6 +21,34 @@ function getRequestKey(req: Request) {
   return ua;
 }
 
+function validatePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const { avaliacoes } = payload as any;
+  if (!avaliacoes || !Array.isArray(avaliacoes) || avaliacoes.length === 0) return false;
+  for (const av of avaliacoes) {
+    // Checa campos obrigatórios + não aceita campos inesperados
+    const keys = Object.keys(av);
+    const allow = ['id_avaliacao', 'nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito', 'comentario', 'data_envio'];
+    for (const k of keys) {
+      if (!allow.includes(k)) return false;
+    }
+    // IDs opcionais, notas obrigatórias
+    for (const prop of ['nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito']) {
+      if (
+        typeof av[prop] !== 'number' ||
+        av[prop] < 1 ||
+        av[prop] > 5
+      ) return false;
+    }
+    if ('comentario' in av) {
+      if (typeof av.comentario !== 'string' || av.comentario.length > 350) return false;
+    }
+  }
+  return true;
+}
+
+const MAX_SIZE = 1024 * 1024; // 1MB
+
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +60,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Rate limit
+  // Limita o tamanho do payload
+  const contentLength = req.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_SIZE) {
+    return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 413,
+    });
+  }
+
   let key = await getRequestKey(req);
   if (key instanceof Promise) key = await key;
   const now = Date.now();
@@ -50,7 +86,25 @@ serve(async (req) => {
   }
 
   try {
-    const { avaliacoes } = await req.json();
+    const bodyRaw = await req.text();
+    if (bodyRaw.length > MAX_SIZE) {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 413
+      });
+    }
+    let body;
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
+    }
+
+    if (!validatePayload(body)) {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
+    }
+    const { avaliacoes } = body;
     const prompt = `Você é um especialista em políticas públicas e análise de qualidade de serviços governamentais. Seu papel é interpretar os dados de satisfação dos usuários em um serviço de saúde pública e apresentar recomendações baseadas em boas práticas administrativas.
 
 Baseie-se nas seguintes informações:
@@ -88,7 +142,10 @@ ${JSON.stringify(avaliacoes)}`;
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error("Erro ao chamar OpenAI: " + err);
+      return new Response(JSON.stringify({ analysis: "Erro ao chamar OpenAI: " + err }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500
+      });
     }
     const data = await response.json();
     const analysis = data.choices?.[0]?.message?.content || "Nenhum resultado gerado.";
@@ -119,7 +176,7 @@ ${JSON.stringify(avaliacoes)}`;
 
     return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    console.error('[analyze-gpt4]', e);
-    return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
+    return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
   }
 });

@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -19,6 +18,31 @@ function getRequestKey(req: Request) {
   return ua;
 }
 
+function validatePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const { avaliacoes } = payload as any;
+  if (!avaliacoes || !Array.isArray(avaliacoes) || avaliacoes.length === 0) return false;
+  for (const av of avaliacoes) {
+    const keys = Object.keys(av);
+    const allow = ['id_avaliacao', 'nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito', 'comentario', 'data_envio'];
+    for (const k of keys) {
+      if (!allow.includes(k)) return false;
+    }
+    for (const prop of ['nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito']) {
+      if (
+        typeof av[prop] !== 'number' ||
+        av[prop] < 1 ||
+        av[prop] > 5
+      ) return false;
+    }
+    if ('comentario' in av) {
+      if (typeof av.comentario !== 'string' || av.comentario.length > 350) return false;
+    }
+  }
+  return true;
+}
+const MAX_SIZE = 1024 * 1024;
+
 const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +52,14 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  const contentLength = req.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_SIZE) {
+    return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 413,
+    });
   }
 
   let key = await getRequestKey(req);
@@ -47,7 +79,25 @@ serve(async (req) => {
   }
 
   try {
-    const { avaliacoes } = await req.json();
+    const bodyRaw = await req.text();
+    if (bodyRaw.length > MAX_SIZE) {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 413
+      });
+    }
+    let body;
+    try {
+      body = JSON.parse(bodyRaw);
+    } catch {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
+    }
+
+    if (!validatePayload(body)) {
+      return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
+    }
+    const { avaliacoes } = body;
     const prompt = `Você é um analista de dados especializado em saúde pública e usabilidade de serviços. Sua função é analisar as médias e padrões de avaliações feitas por cidadãos em um serviço de saúde municipal.
 
 Com base nas informações:
