@@ -1,0 +1,33 @@
+
+name: Build and Validate
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      # (Opcional) Validação de código/linting - descomente se quiser usar no futuro
+      # - name: Run linter
+      #   run: bun run lint
+
+      - name: Build Vite project
+        run: bun run build
+
+      # (Opcional) Testes automáticos - descomente se quiser usar no futuro
+      # - name: Run tests
+      #   run: bun run test
+
