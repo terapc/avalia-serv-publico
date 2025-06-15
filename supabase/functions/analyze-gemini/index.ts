@@ -60,7 +60,29 @@ ${JSON.stringify(avaliacoes)}`;
     }
     const data = await response.json();
     const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nenhum resultado gerado.";
-    return new Response(JSON.stringify({ analysis }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Novo: gerar resumo chamando edge function resumo-ia
+    let resumo = "";
+    try {
+      const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
+        method: "POST",
+        headers: {
+          "apikey": Deno.env.get('SUPABASE_ANON_KEY'),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ texto: analysis })
+      });
+      if (resumoResponse.ok) {
+        const resumoData = await resumoResponse.json();
+        resumo = resumoData.resumo;
+      } else {
+        resumo = "Não foi possível gerar resumo.";
+      }
+    } catch {
+      resumo = "Não foi possível gerar resumo.";
+    }
+
+    return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error('[analyze-gemini]', e);
     return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });

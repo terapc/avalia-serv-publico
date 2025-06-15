@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,9 +45,32 @@ async function callAnalysis(source: AnalysisSource, data: Answered[]) {
   return response?.analysis || "Nenhum resultado gerado.";
 }
 
+// Novo: hook utilitário para painel expand/collapse por IA
+function useCollapsibleStates(sources: string[]) {
+  const [state, setState] = useState<{[k: string]: boolean}>({});
+  const toggle = (k: string) => setState(s => ({...s, [k]: !s[k]}));
+  return { open: state, toggle };
+}
+
+// Novo: Função que salva resumo+análise na tabela avaliacoes
+async function saveAnalysisSummaryToDB(source: AnalysisSource, analysis: string, resumo: string) {
+  const keyAnalysis = {
+    gpt4: { analysis: "resumo_gpt", field: "resumo_gpt" },
+    claude: { analysis: "resumo_claude", field: "resumo_claude" },
+    gemini: { analysis: "resumo_gemini", field: "resumo_gemini" }
+  };
+  // Salvar apenas no primeiro registro para simplificação (ou adaptar para lógica real)
+  await supabase
+    .from("avaliacoes")
+    .update({ [keyAnalysis[source].field]: resumo })
+    .neq("id", "null"); // <= Placeholder. Ajuste conforme a regra de save.
+}
+
 const ResultsDashboard: React.FC = () => {
   const [analyses, setAnalyses] = useState<{[k in AnalysisSource]?: string}>({});
+  const [resumos, setResumos] = useState<{[k in AnalysisSource]?: string}>({});
   const [loading, setLoading] = useState<{[k in AnalysisSource]?: boolean}>({});
+  const { open, toggle } = useCollapsibleStates(["gpt4", "claude", "gemini"]);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["avaliacoes"],
     queryFn: fetchAvaliacoes,
@@ -67,10 +89,18 @@ const ResultsDashboard: React.FC = () => {
   async function handleAnalysis(source: AnalysisSource) {
     setLoading(l => ({...l, [source]: true}));
     try {
-      const analysisText = await callAnalysis(source, data || []);
-      setAnalyses(a => ({...a, [source]: analysisText}));
+      // Chama a Edge Function e já recebe resumo + análise
+      const { data: response, error } = await supabase.functions.invoke(`analyze-${source}`, {
+        body: { avaliacoes: data || [] },
+      });
+      if (error) throw error;
+      setAnalyses(a => ({...a, [source]: response?.analysis || ""}));
+      setResumos(r => ({...r, [source]: response?.resumo || ""}));
+      // Opcional: Salva no banco de dados
+      // await saveAnalysisSummaryToDB(source, response?.analysis, response?.resumo);
     } catch (err) {
       setAnalyses(a => ({...a, [source]: "Erro ao gerar análise. Tente novamente mais tarde."}));
+      setResumos(r => ({...r, [source]: "Erro ao gerar resumo."}));
     }
     setLoading(l => ({...l, [source]: false}));
   }
@@ -109,7 +139,6 @@ const ResultsDashboard: React.FC = () => {
       {/* Coluna 2: Análises IA */}
       <div className="bg-white rounded-xl shadow p-8 flex flex-col">
         <h3 className="text-xl font-bold mb-4 text-green-900">Análise Inteligente</h3>
-
         <div className="flex gap-2 mb-4">
           {(["gpt4", "claude", "gemini"] as AnalysisSource[]).map(src => (
             <button
@@ -125,13 +154,26 @@ const ResultsDashboard: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 gap-3">
           {(["gpt4", "claude", "gemini"] as AnalysisSource[]).map(src => (
-            <div key={src} className="bg-gray-50 rounded-lg px-4 py-3 min-h-[50px] border">
+            <div key={src} className="bg-gray-50 rounded-lg px-4 py-3 border">
               <div className="text-xs font-bold text-green-800 mb-1">{ANALYSIS_LABELS[src]}</div>
-              <div className={analyses[src] ? "" : "text-gray-400"}>
-                {loading[src]
-                  ? "Analisando dados…"
-                  : analyses[src] || "Clique no botão acima para gerar a análise."}
-              </div>
+              {loading[src] ? (
+                <div className="text-gray-400">Analisando dados…</div>
+              ) : resumos[src] ? (
+                <div>
+                  <div className="mb-2">{resumos[src]}</div>
+                  <button
+                    className="text-green-700 text-xs font-semibold underline hover-scale"
+                    onClick={() => toggle(src)}
+                  >
+                    {open[src] ? "Ocultar análise completa" : "Ver análise completa"}
+                  </button>
+                  {open[src] &&
+                    <div className="mt-2 text-gray-800 animate-fade-in" style={{whiteSpace: "pre-line"}}>{analyses[src]}</div>
+                  }
+                </div>
+              ) : (
+                <div className="text-gray-400">Clique no botão acima para gerar a análise.</div>
+              )}
             </div>
           ))}
         </div>

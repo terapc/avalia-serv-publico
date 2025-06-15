@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -55,7 +54,29 @@ ${JSON.stringify(avaliacoes)}`;
     }
     const data = await response.json();
     const analysis = data.choices?.[0]?.message?.content || "Nenhum resultado gerado.";
-    return new Response(JSON.stringify({ analysis }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Novo: gerar resumo chamando edge function resumo-ia
+    let resumo = "";
+    try {
+      const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
+        method: "POST",
+        headers: {
+          "apikey": Deno.env.get('SUPABASE_ANON_KEY'),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ texto: analysis })
+      });
+      if (resumoResponse.ok) {
+        const resumoData = await resumoResponse.json();
+        resumo = resumoData.resumo;
+      } else {
+        resumo = "Não foi possível gerar resumo.";
+      }
+    } catch {
+      resumo = "Não foi possível gerar resumo.";
+    }
+
+    return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error('[analyze-gpt4]', e);
     return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });

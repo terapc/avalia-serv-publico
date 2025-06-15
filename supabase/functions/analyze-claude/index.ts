@@ -12,7 +12,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
   try {
     const { avaliacoes } = await req.json();
     const prompt = `Você é um consultor especializado em gestão pública e atendimento ao cidadão. Seu papel é analisar avaliações de usuários sobre serviços públicos de saúde e gerar um parecer técnico com foco em empatia e melhoria contínua. Use uma linguagem profissional, acessível e motivadora.
@@ -52,17 +51,37 @@ ${JSON.stringify(avaliacoes)}`;
       },
       body: JSON.stringify(requestAnthropic)
     });
-
     if (!response.ok) {
       const err = await response.text();
       throw new Error("Erro ao chamar Anthropic: " + err);
     }
     const data = await response.json();
     const analysis = data.content?.[0]?.text || "Nenhum resultado gerado.";
-    return new Response(JSON.stringify({ analysis }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Novo: gerar resumo chamando edge function resumo-ia
+    let resumo = "";
+    try {
+      const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
+        method: "POST",
+        headers: {
+          "apikey": Deno.env.get('SUPABASE_ANON_KEY'),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ texto: analysis })
+      });
+      if (resumoResponse.ok) {
+        const resumoData = await resumoResponse.json();
+        resumo = resumoData.resumo;
+      } else {
+        resumo = "Não foi possível gerar resumo.";
+      }
+    } catch {
+      resumo = "Não foi possível gerar resumo.";
+    }
+
+    return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error('[analyze-claude]', e);
     return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
   }
 });
-
