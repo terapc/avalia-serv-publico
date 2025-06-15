@@ -2,8 +2,13 @@
 project_id = "umtpttbwcgonyfkvprio"
 
 [functions.analyze-gpt4]
-verify_jwt = false
+verify_jwt = true
+
 [functions.analyze-claude]
-verify_jwt = false
+verify_jwt = true
+
 [functions.analyze-gemini]
-verify_jwt = false
+verify_jwt = true
+
+[functions.resumo-ia]
+verify_jwt = true
