@@ -1,6 +1,22 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+
+const rateLimitCache = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+function getRequestKey(req: Request) {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+  if (ip) return ip;
+  const ua = req.headers.get("user-agent") || "none";
+  const hash = crypto.subtle ? crypto.subtle.digest("SHA-1", new TextEncoder().encode(ua)) : null;
+  if (hash) {
+    return hash.then((arrBuf) =>
+      Array.from(new Uint8Array(arrBuf)).map((b) => b.toString(16).padStart(2, "0")).join("")
+    );
+  }
+  return ua;
+}
 
 const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
 const corsHeaders = {
@@ -12,6 +28,23 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  let key = await getRequestKey(req);
+  if (key instanceof Promise) key = await key;
+  const now = Date.now();
+  const entry = rateLimitCache.get(key) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  if (now > entry.resetAt) {
+    rateLimitCache.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+  } else if (entry.count >= RATE_LIMIT) {
+    console.log(`[rate-limit] analyze-claude: Limite excedido para chave ${key} (${entry.count}/${RATE_LIMIT})`);
+    return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em 1 hora." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 429,
+    });
+  } else {
+    rateLimitCache.set(key, { count: entry.count + 1, resetAt: entry.resetAt });
+  }
+
   try {
     const { avaliacoes } = await req.json();
     const prompt = `Você é um consultor especializado em gestão pública e atendimento ao cidadão. Seu papel é analisar avaliações de usuários sobre serviços públicos de saúde e gerar um parecer técnico com foco em empatia e melhoria contínua. Use uma linguagem profissional, acessível e motivadora.
