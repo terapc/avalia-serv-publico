@@ -61,24 +61,27 @@ ${JSON.stringify(avaliacoes)}`;
     const data = await response.json();
     const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nenhum resultado gerado.";
 
-    // Novo: gerar resumo chamando edge function resumo-ia
+    // Novo: gerar resumo chamando edge function resumo-ia e salvar no banco
     let resumo = "";
     try {
       const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
         method: "POST",
         headers: {
-          "apikey": Deno.env.get('SUPABASE_ANON_KEY'),
+          "apikey": Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ texto: analysis })
+        body: JSON.stringify({ texto: analysis, origem: "gemini" })
       });
       if (resumoResponse.ok) {
         const resumoData = await resumoResponse.json();
         resumo = resumoData.resumo;
       } else {
+        const errText = await resumoResponse.text();
         resumo = "Não foi possível gerar resumo.";
+        console.error("[analyze-gemini] erro na chamada da função resumo-ia:", errText);
       }
-    } catch {
+    } catch (e) {
+      console.error('[analyze-gemini] exceção ao chamar resumo-ia:', e);
       resumo = "Não foi possível gerar resumo.";
     }
 

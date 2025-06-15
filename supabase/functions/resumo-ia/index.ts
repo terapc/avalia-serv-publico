@@ -11,7 +11,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
   try {
-    const { texto } = await req.json();
+    const { texto, origem } = await req.json();
+    if (!texto || !origem) {
+      throw new Error("Parâmetro texto ou origem ausente.");
+    }
     const prompt = `Resuma o seguinte texto de forma clara, objetiva e profissional, com no máximo 3 frases. O objetivo é destacar os pontos principais da análise, mantendo a linguagem formal e acessível. Não use títulos ou enumerações. Evite termos genéricos como "conforme os dados" e vá direto ao ponto. Este resumo será exibido ao público antes do texto completo.
 
 Texto a ser resumido:
@@ -38,6 +41,31 @@ ${texto}`;
     }
     const data = await response.json();
     const resumo = data.choices?.[0]?.message?.content || "Não foi possível gerar resumo.";
+
+    // Salvar no campo correto da tabela
+    let col = "";
+    if (origem === "gpt4") col = "resumo_gpt";
+    else if (origem === "claude") col = "resumo_claude";
+    else if (origem === "gemini") col = "resumo_gemini";
+    // Opcional: Salva o resumo em todos os registros com texto igual (não sabemos o id)
+    try {
+      if (col) {
+        // Busca os registros mais recentes com esse texto e atualiza o campo de resumo respectivo
+        // Usa .ilike para encontrar ocorrências recentes do texto longo
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.50.0");
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        // Atualiza registros com comentário/analise igual ao texto (multiplo, pode ser ajustado)
+        await supabase
+          .from("avaliacoes")
+          .update({ [col]: resumo })
+          .ilike("comentario", `%${texto.slice(0, 42)}%`); // Se quiser ajustar, pode mudar para outro critério
+      }
+    } catch (e) {
+      console.error('[resumo-ia] erro ao salvar resumo no banco:', e);
+    }
+
     return new Response(JSON.stringify({ resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error('[resumo-ia]', e);
