@@ -3,16 +3,16 @@ import React from "react";
 
 const AvaliaServLogo = ({ size = 64 }: { size?: number }) => (
   <svg
-    width={size * 5}
+    width={size * 5.5}
     height={size}
-    viewBox="0 0 400 80"
+    viewBox="0 0 440 80"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className="mx-auto"
     style={{ display: "block" }}
   >
     <defs>
-      <linearGradient id="mainGrad" x1="0" y1="40" x2="400" y2="40" gradientUnits="userSpaceOnUse">
+      <linearGradient id="mainGrad" x1="0" y1="40" x2="440" y2="40" gradientUnits="userSpaceOnUse">
         <stop stopColor="#33aaff"/>
         <stop offset="1" stopColor="#23d889"/>
       </linearGradient>
