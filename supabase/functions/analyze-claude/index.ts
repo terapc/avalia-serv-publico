@@ -24,7 +24,7 @@ function validatePayload(payload: unknown) {
   if (!avaliacoes || !Array.isArray(avaliacoes) || avaliacoes.length === 0) return false;
   for (const av of avaliacoes) {
     const keys = Object.keys(av);
-    const allow = ['id_avaliacao', 'nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito', 'comentario', 'data_envio'];
+    const allow = ['id', 'nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito', 'comentario', 'data_envio'];
     for (const k of keys) {
       if (!allow.includes(k)) return false;
     }
