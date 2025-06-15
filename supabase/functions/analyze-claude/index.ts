@@ -64,7 +64,7 @@ ${JSON.stringify(avaliacoes)}`;
       const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
         method: "POST",
         headers: {
-          "apikey": Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+          "Authorization": `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ texto: analysis, origem: "claude" })
