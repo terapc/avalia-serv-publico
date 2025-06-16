@@ -1,23 +1,15 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
-// Rate limiting cache (em memória, reinicia a cada deploy de função)
 const rateLimitCache = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 10;
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hora
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
 function getRequestKey(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   if (ip) return ip;
-  // Fallback: gera hash SHA-1 do User-Agent, se User-Agent existir
   const ua = req.headers.get("user-agent") || "none";
-  const hash = crypto.subtle ? crypto.subtle.digest("SHA-1", new TextEncoder().encode(ua)) : null;
-  if (hash) {
-    // converte buffer em hex
-    return hash.then((arrBuf) =>
-      Array.from(new Uint8Array(arrBuf)).map((b) => b.toString(16).padStart(2, "0")).join("")
-    );
-  }
   return ua;
 }
 
@@ -26,13 +18,11 @@ function validatePayload(payload: unknown) {
   const { avaliacoes } = payload as any;
   if (!avaliacoes || !Array.isArray(avaliacoes) || avaliacoes.length === 0) return false;
   for (const av of avaliacoes) {
-    // Checa campos obrigatórios + não aceita campos inesperados
     const keys = Object.keys(av);
     const allow = ['id', 'nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito', 'comentario', 'data_envio'];
     for (const k of keys) {
       if (!allow.includes(k)) return false;
     }
-    // IDs opcionais, notas obrigatórias
     for (const prop of ['nota_atendimento', 'nota_espera', 'nota_limpeza', 'nota_respeito']) {
       if (
         typeof av[prop] !== 'number' ||
@@ -47,7 +37,7 @@ function validatePayload(payload: unknown) {
   return true;
 }
 
-const MAX_SIZE = 1024 * 1024; // 1MB
+const MAX_SIZE = 1024 * 1024;
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const corsHeaders = {
@@ -60,7 +50,6 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Limita o tamanho do payload
   const contentLength = req.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_SIZE) {
     return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
@@ -69,8 +58,7 @@ serve(async (req) => {
     });
   }
 
-  let key = await getRequestKey(req);
-  if (key instanceof Promise) key = await key;
+  let key = getRequestKey(req);
   const now = Date.now();
   const entry = rateLimitCache.get(key) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
   if (now > entry.resetAt) {
@@ -105,6 +93,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
     }
     const { avaliacoes } = body;
+    
+    console.log(`[analyze-gpt4] Iniciando análise de ${avaliacoes.length} avaliações`);
+    
     const prompt = `Você é um especialista em políticas públicas e análise de qualidade de serviços governamentais. Seu papel é interpretar os dados de satisfação dos usuários em um serviço de saúde pública e apresentar recomendações baseadas em boas práticas administrativas.
 
 Baseie-se nas seguintes informações:
@@ -130,7 +121,7 @@ ${JSON.stringify(avaliacoes)}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {role: "system", content: "Especialista em políticas públicas. Sempre segue as orientações do usuário e os dados recebidos para avaliações."},
           {role: "user", content: prompt}
@@ -142,7 +133,8 @@ ${JSON.stringify(avaliacoes)}`;
 
     if (!response.ok) {
       const err = await response.text();
-      return new Response(JSON.stringify({ analysis: "Erro ao chamar OpenAI: " + err }), {
+      console.error("[analyze-gpt4] Erro ao chamar OpenAI:", response.status, err);
+      return new Response(JSON.stringify({ analysis: `Erro ao chamar OpenAI: ${response.status}` }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500
       });
@@ -150,7 +142,8 @@ ${JSON.stringify(avaliacoes)}`;
     const data = await response.json();
     const analysis = data.choices?.[0]?.message?.content || "Nenhum resultado gerado.";
 
-    // Novo: gerar resumo chamando edge function resumo-ia e salvar no banco
+    console.log(`[analyze-gpt4] Análise gerada com sucesso. Iniciando geração de resumo...`);
+
     let resumo = "";
     try {
       const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
@@ -161,21 +154,26 @@ ${JSON.stringify(avaliacoes)}`;
         },
         body: JSON.stringify({ texto: analysis, origem: "gpt4" })
       });
+      
       if (resumoResponse.ok) {
         const resumoData = await resumoResponse.json();
         resumo = resumoData.resumo;
+        console.log(`[analyze-gpt4] Resumo gerado com sucesso`);
       } else {
         const errText = await resumoResponse.text();
         resumo = "Não foi possível gerar resumo.";
-        console.error("[analyze-gpt4] erro na chamada da função resumo-ia:", errText);
+        console.error("[analyze-gpt4] erro na chamada da função resumo-ia:", resumoResponse.status, errText);
       }
     } catch (e) {
       console.error('[analyze-gpt4] exceção ao chamar resumo-ia:', e);
       resumo = "Não foi possível gerar resumo.";
     }
 
+    console.log(`[analyze-gpt4] Processamento completo`);
+
     return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
+    console.error('[analyze-gpt4] Erro geral:', e);
     return new Response(JSON.stringify({ analysis: "Erro ao processar os dados." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
   }

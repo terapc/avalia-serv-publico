@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -9,12 +10,6 @@ function getRequestKey(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   if (ip) return ip;
   const ua = req.headers.get("user-agent") || "none";
-  const hash = crypto.subtle ? crypto.subtle.digest("SHA-1", new TextEncoder().encode(ua)) : null;
-  if (hash) {
-    return hash.then((arrBuf) =>
-      Array.from(new Uint8Array(arrBuf)).map((b) => b.toString(16).padStart(2, "0")).join("")
-    );
-  }
   return ua;
 }
 
@@ -62,8 +57,7 @@ serve(async (req) => {
     });
   }
 
-  let key = await getRequestKey(req);
-  if (key instanceof Promise) key = await key;
+  let key = getRequestKey(req);
   const now = Date.now();
   const entry = rateLimitCache.get(key) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
   if (now > entry.resetAt) {
@@ -98,6 +92,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
     }
     const { avaliacoes } = body;
+    
+    console.log(`[analyze-gemini] Iniciando análise de ${avaliacoes.length} avaliações`);
+    
     const prompt = `Você é um analista de dados especializado em saúde pública e usabilidade de serviços. Sua função é analisar as médias e padrões de avaliações feitas por cidadãos em um serviço de saúde municipal.
 
 Com base nas informações:
@@ -140,12 +137,14 @@ ${JSON.stringify(avaliacoes)}`;
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error("Erro ao chamar Gemini: " + err);
+      console.error("[analyze-gemini] Erro ao chamar Gemini:", response.status, err);
+      throw new Error(`Erro ao chamar Gemini: ${response.status}`);
     }
     const data = await response.json();
     const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nenhum resultado gerado.";
 
-    // Novo: gerar resumo chamando edge function resumo-ia e salvar no banco
+    console.log(`[analyze-gemini] Análise gerada com sucesso. Iniciando geração de resumo...`);
+
     let resumo = "";
     try {
       const resumoResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/resumo-ia`, {
@@ -159,19 +158,22 @@ ${JSON.stringify(avaliacoes)}`;
       if (resumoResponse.ok) {
         const resumoData = await resumoResponse.json();
         resumo = resumoData.resumo;
+        console.log(`[analyze-gemini] Resumo gerado com sucesso`);
       } else {
         const errText = await resumoResponse.text();
         resumo = "Não foi possível gerar resumo.";
-        console.error("[analyze-gemini] erro na chamada da função resumo-ia:", errText);
+        console.error("[analyze-gemini] erro na chamada da função resumo-ia:", resumoResponse.status, errText);
       }
     } catch (e) {
       console.error('[analyze-gemini] exceção ao chamar resumo-ia:', e);
       resumo = "Não foi possível gerar resumo.";
     }
 
+    console.log(`[analyze-gemini] Processamento completo`);
+
     return new Response(JSON.stringify({ analysis, resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    console.error('[analyze-gemini]', e);
+    console.error('[analyze-gemini] Erro geral:', e);
     return new Response(JSON.stringify({ analysis: "Erro ao gerar análise. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
   }
 });

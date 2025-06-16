@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
@@ -9,14 +10,9 @@ function getRequestKey(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   if (ip) return ip;
   const ua = req.headers.get("user-agent") || "none";
-  const hash = crypto.subtle ? crypto.subtle.digest("SHA-1", new TextEncoder().encode(ua)) : null;
-  if (hash) {
-    return hash.then((arrBuf) =>
-      Array.from(new Uint8Array(arrBuf)).map((b) => b.toString(16).padStart(2, "0")).join("")
-    );
-  }
   return ua;
 }
+
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,10 +24,10 @@ function validatePayload(payload: unknown) {
   const { texto, origem } = payload as any;
   if (!texto || typeof texto !== "string" || texto.length > 7000) return false;
   if (!origem || typeof origem !== "string" || !["gpt4", "claude", "gemini"].includes(origem)) return false;
-  // Não aceita campos inesperados
   if (Object.keys(payload).length !== 2) return false;
   return true;
 }
+
 const MAX_SIZE = 1024 * 1024;
 
 serve(async (req) => {
@@ -46,8 +42,7 @@ serve(async (req) => {
     });
   }
 
-  let key = await getRequestKey(req);
-  if (key instanceof Promise) key = await key;
+  let key = getRequestKey(req);
   const now = Date.now();
   const entry = rateLimitCache.get(key) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
   if (now > entry.resetAt) {
@@ -63,7 +58,6 @@ serve(async (req) => {
   }
 
   try {
-    // Adiciona log de entrada
     let reqBody;
     try {
       reqBody = await req.text();
@@ -72,6 +66,7 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 413
         });
       }
+      
       let body;
       try {
         body = JSON.parse(reqBody);
@@ -79,19 +74,33 @@ serve(async (req) => {
         return new Response(JSON.stringify({ resumo: "Erro ao processar os dados." }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
       }
+      
       if (!validatePayload(body)) {
         return new Response(JSON.stringify({ resumo: "Erro ao processar os dados." }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
       }
+      
       const { texto, origem } = body;
+      
       if (!texto || !origem) {
         console.error(`[resumo-ia] Parâmetro texto ou origem ausente. texto? ${!!texto} origem? ${!!origem}`);
         throw new Error("Parâmetro texto ou origem ausente.");
       }
+
+      if (!openAIApiKey) {
+        console.error(`[resumo-ia] OpenAI API key não configurada`);
+        return new Response(JSON.stringify({ resumo: "Configuração de API não encontrada." }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500
+        });
+      }
+      
       const prompt = `Resuma o seguinte texto de forma clara, objetiva e profissional, com no máximo 3 frases. O objetivo é destacar os pontos principais da análise, mantendo a linguagem formal e acessível. Não use títulos ou enumerações. Evite termos genéricos como "conforme os dados" e vá direto ao ponto. Este resumo será exibido ao público antes do texto completo.
 
 Texto a ser resumido:
 ${texto}`;
+
+      console.log(`[resumo-ia] Iniciando geração de resumo para origem: ${origem}`);
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: "POST",
         headers: {
@@ -99,7 +108,7 @@ ${texto}`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "gpt-4o-mini",
           messages: [
             {role: "system", content: "Você é um redator profissional de resumos para gestores públicos."},
             {role: "user", content: prompt}
@@ -108,42 +117,22 @@ ${texto}`;
           max_tokens: 200
         })
       });
+      
       if (!response.ok) {
         const err = await response.text();
-        console.error("[resumo-ia] Erro ao chamar OpenAI:", err);
-        throw new Error("Erro ao chamar OpenAI: " + err);
+        console.error("[resumo-ia] Erro ao chamar OpenAI:", response.status, err);
+        throw new Error(`Erro ao chamar OpenAI: ${response.status} - ${err}`);
       }
+      
       const data = await response.json();
       const resumo = data.choices?.[0]?.message?.content || "Não foi possível gerar resumo.";
 
-      // Salvar no campo correto da tabela
-      let col = "";
-      if (origem === "gpt4") col = "resumo_gpt";
-      else if (origem === "claude") col = "resumo_claude";
-      else if (origem === "gemini") col = "resumo_gemini";
-      try {
-        if (col) {
-          // Busca os registros mais recentes com esse texto e atualiza o campo de resumo respectivo
-          const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.50.0");
-          const supabaseUrl = Deno.env.get('SUPABASE_URL');
-          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-          const supabase = createClient(supabaseUrl, supabaseKey);
-          const { error } = await supabase
-            .from("avaliacoes")
-            .update({ [col]: resumo })
-            .ilike("comentario", `%${texto.slice(0, 42)}%`);
-          if (error) {
-            console.error(`[resumo-ia] Erro ao salvar resumo na coluna ${col}:`, error);
-          }
-        }
-      } catch (e) {
-        console.error('[resumo-ia] Erro no bloco de salvar resumo no banco:', e);
-      }
+      console.log(`[resumo-ia] Resumo gerado com sucesso para origem ${origem}: ${resumo.substring(0, 100)}...`);
 
-      // Log final de saída do resumo
-      console.log("[resumo-ia] Resumo gerado para origem", origem, ":", resumo);
-
-      return new Response(JSON.stringify({ resumo }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ resumo }), { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+      
     } catch (parseErr) {
       console.error('[resumo-ia] Erro ao parsear body:', parseErr);
       return new Response(JSON.stringify({ resumo: "Erro ao interpretar requisição." }), {
@@ -152,6 +141,8 @@ ${texto}`;
     }
   } catch (e) {
     console.error('[resumo-ia] ERRO GERAL', e);
-    return new Response(JSON.stringify({ resumo: "Erro ao gerar resumo. Tente novamente mais tarde." }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 });
+    return new Response(JSON.stringify({ resumo: "Erro ao gerar resumo. Tente novamente mais tarde." }), { 
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 
+    });
   }
 });
